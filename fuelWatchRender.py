@@ -2,46 +2,43 @@ import feedparser
 import requests
 import webbrowser
 from datetime import date
+from urllib.parse import urlencode
+
 
 #set the location
 location = "Canning Vale"
 
 
-#retrieve the relevent data, parse into list & dictionary
-response = requests.get(f"http://www.fuelwatch.wa.gov.au/fuelwatch/fuelWatchRSS?Product=1&Suburb={location}", headers={"user-agent": ""})
-feed1 = feedparser.parse(response.content)
+#parse function from api
+def get_fuel(location, tomorrow=False):
+    q = urlencode({
+        'Product': 1,
+        'Suburb': location,
+        'Day': 'tomorrow' if tomorrow else 'today'
+    })
+    response = requests.get(f"http://www.fuelwatch.wa.gov.au/fuelwatch/fuelWatchRSS?{q}", headers={"user-agent": ""})
+    feed = feedparser.parse(response.content)
 
-tommorow = requests.get(f"https://www.fuelwatch.wa.gov.au/fuelwatch/fuelWatchRSS?Product=4&Suburb={location}&Day=tomorrow", headers={"user-agent": ""})
-feed2 = feedparser.parse(tommorow.content)
-
-
-#Restructure releavent information
-list = []
-for station in feed1["entries"]:
-    Dict = {"location": station["location"],
+    return [
+        {
+            "location": station["location"],
             "address": station["address"],
             "brand": station["brand"],
             "price": station["price"],
-            "date": "Today"
-            }
-    list.append(Dict)
+            "date": "Tomorrow" if tomorrow else "Today",
+        }
+        for station in feed["entries"]
+    ]
 
-for station in feed2["entries"]:
-    Dict = {"location": station["location"],
-            "address": station["address"],
-            "brand": station["brand"],
-            "price": station["price"],
-            "date": "Tomorrow"
-            }
-    list.append(Dict)
 
-sorted_list = sorted(list, key=lambda x: x["price"])
+feed1 = get_fuel(location)
+feed2 = get_fuel(location, tomorrow=True)
+sorted_list = sorted(feed1 + feed2, key=lambda x: x["price"])
 
 
 #structure each entry of list into html
-my_html_tdst = ""
-for item in sorted_list:
-    my_html_tdst += f'''
+my_html_tdst = ''.join(
+    f'''
     <tr>
     <td>{item["location"]}</td>
     <td>{item["address"]}</td>
@@ -50,6 +47,7 @@ for item in sorted_list:
     <td>{item["date"]}</td>
     </tr>
     '''
+    for item in sorted_list)
 
 
 #html body
@@ -97,7 +95,7 @@ my_html = f'''
 
 
 #render and open the html
-f = open(f"render-{date.today()}.html", "w")
-f.write(my_html)
-f.close()
+with open(f"render-{date.today()}.html", "w") as f:
+    f.write(my_html)
+ 
 webbrowser.open(f"render-{date.today()}.html")
